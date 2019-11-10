@@ -1,0 +1,229 @@
+<html>
+<body>
+
+
+<button onclick="input()">좌표를 입력하세요</button>
+
+<button onclick="doClear()">Clear</button>
+
+<p> 1. Click '좌표를 입력하세요' button </p>
+<p> 2. Enter point series. eg, (100,100),(200,200),(100,300) </p>
+<ul>
+  <li> range of point is 0 < x,y < 100 </li>
+  <li> points must be paired </li>
+</ul>
+<p> 3. Before you draw another simple polygon, click 'Clear' button </p>
+
+<br>
+<canvas id="canvas" width="500" height="500" style="border: 2px solid #000000;"></canvas>
+
+<script type="text/javascript">
+
+
+function input () {
+  var position = prompt("Enter point series", "(1,1),(2,2) ...");
+
+  var del = position.replace( /[\{\}\[\]\/?.;:|\)*~`!^\-+<>@\#$%&\\\=\(\'\"]/gi,""); //특수문자제거 정규식
+
+  var rep = del.split(',');
+  var i = 0;
+  var count = 0;
+  var list = [];
+  while(rep[i] != null){
+    if(rep[i] > 100 || rep[i] < 0)
+    {
+      valid = false;
+      alert('올바른 형식이 아닙니다. 다시입력해주세요.');
+      break;
+    }
+    list.push(rep[i]);
+    count++;
+    i++;
+  }
+  i = i -1;
+  count = count/2; // 총 몇개의 점이 들어왔는지
+
+  // 리스트의 처음 값을 마지막에 붙여주기 -> 끝점과 처음점과의 선분을 긋기위해
+  list.push(rep[0]);
+  list.push(rep[1]);
+
+  if(valid != false) // pair가 맞지 않는 경우 형식이 올바르지 않다고 출력
+  {
+    if(list.length % 2 != 0)
+    {
+      valid = false;
+      alert('올바른 형식이 아닙니다. 다시입력해주세요.');
+    }
+    else // Otherwise, check intersect point
+    {
+      var numlist = []
+      var valid = true;
+      for(var x=0; x < count; x++)
+      { // simple polygon 확인
+        var num = 0;
+        var check = 0;
+          for(var j =0; j < count ; j++){ // 모든 점들과의 접점을 확인하기
+            xx = x*2;
+            jj = j*2;
+            check = GetIntersectPoint(list[xx],list[xx+1],list[xx+2],list[xx+3],list[jj],list[jj+1],list[jj+2],list[jj+3]);
+            num += check;
+          }
+      numlist.push(num); // 교차점 list
+      }
+      //document.write(numlist);
+      for(var i = 0; i < count; i++)
+      {
+        if(numlist[i] > 2 || numlist[i] == 0)
+        {
+          // 교차점이 2개 이상이면 simple polygon이 아니므로
+          valid = false;
+          alert('Simple polygon이 아닙니다. 다시입력해주세요.');
+          break;
+        }
+      }
+      if(count == i) // 모든 check를 통과했음으로 drawline
+      {
+        for(var k = 0; k < count; k++) // polygon draw
+        {
+          kk = k*2
+          draw(list[kk],list[kk+1],list[kk+2],list[kk+3])
+        }
+        triangulation(list,list.length); // triangulation draw
+      }
+    }
+  }
+}
+
+function cp(v_num, list) { // 시계방향인지 반시계 방향인지 check를 도와주는 function
+  var sum = 0;
+  for(var i = 0; i < v_num; i++)
+  {
+    ii = i * 2;
+    sum += ((list[ii] * list[ii+3]) - (list[ii+2] * list[ii+1]));
+  }
+  return sum;
+}
+
+function left_check(px, py, ax, ay, bx, by) { // 점 p가 선분AB의 위에 있는지 판단하는 function
+  return (((bx - ax) * (py - ay)) >= ((by - ay) * (px - ax)));
+}
+
+function inside_check(px,py,ax,ay,bx,by,cx,cy) { // 점 p가 ABC 안에 있는지 판단하는 function
+  if(!(left_check(px,py,ax,ay,bx,by))) return false;
+  if(!(left_check(px,py,bx,by,cx,cy))) return false;
+  if(!(left_check(px,py,cx,cy,ax,ay))) return false;
+  return true;
+}
+
+function get_ear(a, b, c, v_num, point_index, list) { // ear부분을 check하는 function
+  var a_index = point_index[a]*2;
+  var b_index = point_index[b]*2;
+  var c_index = point_index[c]*2;
+
+  var ax = list[a_index];
+  var ay = list[a_index+1];
+  //document.write(ax);
+  //document.write(ay);
+  var bx = list[b_index];
+  var by = list[b_index+1];
+  //document.write(bx);
+  //document.write(by);
+  var cx = list[c_index];
+  var cy = list[c_index+1];
+  //document.write(cx);
+  //document.write(cy);
+  if(left_check(bx,by,ax,ay,cx,cy)) return false;
+  for (var i = 0, j = 0; j < v_num; i += 2, j++)
+  {
+    if((j == a) || (j == b) || (j == c)) continue;
+    else
+    {
+      var px = list[point_index[j]*2];
+      var py = list[(point_index[j]*2)+1];
+      if(inside_check(px,py,ax,ay,bx,by,cx,cy)) return false;
+    }
+  }
+  return true;
+}
+
+function triangulation(list, v_len) {
+  var v_num = (v_len/2) - 1;
+  //document.write(v_num);
+  if (v_len < 3) return 0; // single triangle
+  var v_index = new Array(v_len);
+  if(cp(v_num,list) > 0) // ccw
+    for(var i = 0; i < v_num; ++i) v_index[i] = i;
+  else // cw
+    for(var j = 0; j < v_num; ++j) v_index[j] = v_num - 1 - j;
+  //document.write(v_index[0]);
+  //document.write(v_index[1]);
+  //document.write(v_index[2]);
+  //document.write(v_index[3]);
+  //document.write(v_index[4]);
+  list.pop();
+  list.pop();
+  for(var b = v_num - 1; v_num > 2;)
+  {
+    var a = b % v_num;
+    //document.write(a);
+    b = (a+1) % v_num;
+    //document.write(b);
+    var c = (b+1) % v_num;
+    //document.write(c);
+    if(get_ear(a, b, c, v_num, v_index, list))
+    {
+      draw(list[v_index[a]*2],list[(v_index[a]*2)+1],list[v_index[c]*2],list[(v_index[c]*2)+1])
+      for(var k = b; k < v_num - 1; ++k)
+        v_index[k] = v_index[k+1];
+      v_num -= 1;
+    }
+  }
+}
+
+function GetIntersectPoint(x1,y1,x2,y2,x3,y3,x4,y4)
+{
+    var t;
+    var s;
+    var under = (y4-y3)*(x2-x1)-(x4-x3)*(y2-y1);
+    if(under==0) return 0; // 분모가 0 이면 평행함으로 교차점  X
+
+    var _t = (x4-x3)*(y1-y3) - (y4-y3)*(x1-x3);
+    var _s = (x2-x1)*(y1-y3) - (y2-y1)*(x1-x3);
+
+    t = _t/under;
+    s = _s/under;
+
+    if(t<0.0 || t>1.0 || s<0.0 || s>1.0) return 0; // 교차하지 않는다
+    if(_t==0 && _s==0) return 0; //교차하지 않는다
+
+
+    return 1; // 나머지 경우는 교차하는 것이므로
+}
+
+
+function draw(x1,y1,x2,y2) {
+  var canvas = document.getElementById('canvas');
+  if (canvas.getContext) {
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.lineWidth = 1;
+
+    //document.write(x1,y1,x2,y2);
+    ctx.beginPath();
+    ctx.moveTo(x1*5, y1*5);
+    ctx.lineTo(x2*5, y2*5);
+    ctx.closePath();
+    ctx.stroke();
+
+  }
+}
+
+function doClear() {
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+</script>
+
+</body>
+</html>
